@@ -237,6 +237,8 @@ uint32_t read_flash_sr(stlink_t *sl, uint32_t bank) {
     sr_reg = STM32_FLASH_L5_NSSR;
   } else if(sl->flash_type == STM32_FLASH_TYPE_WB_WL) {
     sr_reg = STM32_FLASH_WB_SR;
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+    sr_reg = STM32_FLASH_WB0_IRQRAW;
   } else {
     ELOG("method 'read_flash_sr' is unsupported\n");
     return (-1);
@@ -271,6 +273,9 @@ uint32_t is_flash_busy(stlink_t *sl) {
     sr_busy_shift = STM32_FLASH_L5_NSSR_BSY;
   } else if(sl->flash_type == STM32_FLASH_TYPE_WB_WL) {
     sr_busy_shift = STM32_FLASH_WB_SR_BSY;
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+    res = read_flash_sr(sl, BANK_1);
+    return (~res) & STM32_FLASH_WB0_IRQ_CMDDONE;
   } else {
     ELOG("method 'is_flash_busy' is unsupported\n");
     return (-1);
@@ -371,6 +376,9 @@ int32_t check_flash_error(stlink_t *sl) {
     PROGERR = (1 << STM32_FLASH_WB_SR_PROGERR);
     PGAERR = (1 << STM32_FLASH_WB_SR_PGAERR);
     break;
+  case STM32_FLASH_TYPE_WB0:
+    res = read_flash_sr(sl, BANK_1) & STM32_FLASH_WB0_IRQ_ERR_MASK;
+    break;
   default:
     break;
   }
@@ -432,6 +440,8 @@ static inline uint32_t is_flash_locked(stlink_t *sl) {
   } else if(sl->flash_type == STM32_FLASH_TYPE_WB_WL) {
     cr_reg = STM32_FLASH_WB_CR;
     cr_lock_shift = STM32_FLASH_WB_CR_LOCK;
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+    return 0;
   } else {
     ELOG("unsupported flash method, abort\n");
     return (-1);
@@ -1179,6 +1189,12 @@ int32_t stlink_erase_flash_page(stlink_t *sl, stm32_addr_t flashaddr) {
     wait_flash_busy(sl);            // wait for the 'busy' bit to clear
     clear_flash_cr_per(sl, BANK_1); // clear the 'enable page erase' bit
     lock_flash(sl);
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+    uint32_t flash_page = ((flashaddr - sl->flash_base) / sl->flash_pgsz);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_IRQRAW, STM32_FLASH_WB0_IRQ_ALL);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_ADDRESS, (flash_page * sl->flash_pgsz) >> 2);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_COMMAND, STM32_FLASH_WB0_CMD_ERASE_PAGE);
+    wait_flash_busy(sl);
   } else if(sl->flash_type == STM32_FLASH_TYPE_F0_F1_F3 ||
              sl->flash_type == STM32_FLASH_TYPE_F1_XL) {
     uint32_t bank = (flashaddr < STM32_F1_FLASH_BANK2_BASE) ? BANK_1 : BANK_2;
@@ -1252,6 +1268,16 @@ int32_t stlink_erase_flash_mass(stlink_t *sl) {
       sl->flash_type == STM32_FLASH_TYPE_WB_WL) {
 
     err = stlink_erase_flash_section(sl, sl->flash_base, sl->flash_size, false);
+
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+    if(sl->chip_id == STM32_CHIPID_WB06_WB07 || sl->chip_id == STM32_CHIPID_WB09) {
+      stlink_write_debug32(sl, STM32_FLASH_WB0_IRQRAW, STM32_FLASH_WB0_IRQ_ALL);
+      stlink_write_debug32(sl, STM32_FLASH_WB0_COMMAND, STM32_FLASH_WB0_CMD_MASS_ERASE);
+      wait_flash_busy_progress(sl);
+    } else {
+      // flash controller does not support mass erase
+      err = stlink_erase_flash_section(sl, sl->flash_base, sl->flash_size, false);
+    }
 
   } else {
     wait_flash_busy(sl);

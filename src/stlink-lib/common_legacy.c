@@ -112,6 +112,12 @@ static void stop_wdg_in_debug(stlink_t *sl) {
     set = (1 << STM32WB_DBGMCU_APB1FZR1_IWDG_STOP) |
           (1 << STM32WB_DBGMCU_APB1FZR1_WWDG_STOP);
     break;
+  case STM32_FLASH_TYPE_WB0:
+    // WB0 has no DBGMCU, watchdog can only be turned off
+    if(!stlink_read_debug32(sl, STM32WB0_RCC_APB0ENR, &value)) {
+      stlink_write_debug32(sl, STM32WB0_RCC_APB0ENR, value & (~STM32WB0_RCC_APB0_WDGEN));
+    }
+    return;
   default:
     return;
   }
@@ -1152,6 +1158,17 @@ int32_t stlink_chip_id(stlink_t *sl, uint32_t *chip_id) {
     // STM32L0 (RM0377, pg813; RM0367, pg915; RM0376, pg917)
     // STM32G0 (RM0444, pg1367)
     ret = stlink_read_debug32(sl, 0x40015800, chip_id);
+    
+    if (*chip_id == 0) {
+      // these devices don't have a DBG_IDCODE register
+      // we follow STM32CubeProg and use PART_NUMBER from JTAG_ID instead
+      // STM32WB05 (RM0491, pg115)
+      // STM32WB06/WB07 (RM0530, pg105)
+      // STM32WB09 (RM0505, pg167)
+      // STM32WL3x (RM0511, pg176)
+      ret = stlink_read_debug32(sl, STM32WB0_JTAG_ID, chip_id);
+      *chip_id = (*chip_id) >> STM32WB0_JTAG_PART_NR;
+    }
   } else if(cpu_id.part == STM32_REG_CMx_CPUID_PARTNO_CM33) {
     // STM32L5 (RM0438, pg2157)
     ret = stlink_read_debug32(sl, 0xE0044000, chip_id);
@@ -1225,7 +1242,9 @@ int32_t stlink_load_device_params(stlink_t *sl) {
     flash_size = flash_size >> 16;
   }
 
-  flash_size = flash_size & 0xffff;
+  if(params->flash_type != STM32_FLASH_TYPE_WB0) {
+    flash_size = flash_size & 0xffff;
+  }
 
   if((sl->chip_id == STM32_CHIPID_L1_MD ||
        sl->chip_id == STM32_CHIPID_F1_VL_MD_LD ||
@@ -1240,6 +1259,27 @@ int32_t stlink_load_device_params(stlink_t *sl) {
       sl->flash_size = 384 * 1024;
     } else {
       sl->flash_size = 256 * 1024;
+    }
+  } else if(params->flash_type == STM32_FLASH_TYPE_WB0) {
+    sl->flash_base = STM32WB0_FLASH_BASE;
+    sl->flash_size = ((flash_size & 0x1ffff) + 1) * 4;
+    if(sl->chip_id == STM32_CHIPID_WL3x) {
+      // RM0511, p211
+      switch((flash_size >> STM32_FLASH_WB0_RAM_SIZE) & 0x01)
+      {
+        case 0: sl->sram_size = 16*1024; break;
+        case 1: sl->sram_size = 32*1024; break;
+      }
+    } else if(sl->chip_id != STM32_CHIPID_WB05) {
+      // WB06/WB07 RM0530, p149
+      // WB09      RM0505, p183
+      switch((flash_size >> STM32_FLASH_WB0_RAM_SIZE) & 0x03)
+      {
+        case 0: // also 32kB
+        case 1: sl->sram_size = 32*1024; break;
+        case 2: sl->sram_size = 48*1024; break;
+        case 3: sl->sram_size = 64*1024; break;
+      }
     }
   } else {
     sl->flash_size = flash_size * 1024;
