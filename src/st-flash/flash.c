@@ -56,6 +56,7 @@ static void usage(void) {
     puts("  --connect-under-reset  Pull reset low while connecting.");
     puts("  --hot-plug             Connect without reset.");
     puts("  --reset                Reset after writing.");
+    puts("  --mass-erase           Mass erase before writing");
     puts("  --format {binary|ihex} Format of file to read or write. When writing");
     puts("                         with ihex specifying addr is not needed.");
     puts("  --flash <size>         Specify size of flash, e.g. 128k, 1M.");

@@ -265,7 +265,7 @@ int32_t stlink_cpu_id(stlink_t *sl, cortex_m3_cpuid_t *cpuid);
 uint32_t stlink_calculate_pagesize(stlink_t *sl, uint32_t flashaddr);
 void stlink_print_data(stlink_t *sl);
 bool stlink_is_core_halted(stlink_t *sl);
-int32_t write_buffer_to_sram(stlink_t *sl, flash_loader_t* fl, const uint8_t* buf, uint16_t size);
+int32_t write_buffer_to_sram(stlink_t *sl, flash_loader_t* fl, const uint8_t* buf, uint16_t size, uint16_t padded_size);
 int32_t stlink_fread(stlink_t* sl, const char* path, bool is_ihex, stm32_addr_t addr, uint32_t size);
 // int32_t stlink_chip_id(stlink_t *sl, uint32_t *chip_id);
 int32_t stlink_load_device_params(stlink_t *sl);
