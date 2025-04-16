@@ -1446,29 +1446,33 @@ int32_t stlink_fcheck_flash(stlink_t *sl, const char *path, stm32_addr_t addr) {
  */
 int32_t stlink_verify_write_flash(stlink_t *sl, stm32_addr_t address, uint8_t *data, uint32_t length) {
   uint32_t off;
-  uint32_t cmp_size = (sl->flash_pgsz > 0x1800) ? 0x1800 : sl->flash_pgsz;
+  uint32_t chunk_size = (sl->flash_pgsz > 0x1800) ? 0x1800 : sl->flash_pgsz;
   ILOG("Starting verification of write complete\n");
 
-  for(off = 0; off < length; off += cmp_size) {
+  for(off = 0; off < length; ) {
     uint32_t aligned_size;
+    uint32_t read_address = address + off;
+    uint32_t aligned_read_address = read_address & 0x03;
+    uint32_t alignment_offset = read_address - aligned_read_address;
+    uint32_t cmp_size = chunk_size - alignment_offset;
 
-    // adjust last page size
     if((off + cmp_size) > length) {
       cmp_size = length - off;
     }
 
-    aligned_size = cmp_size;
-
+    aligned_size = alignment_offset + cmp_size;
     if(aligned_size & (4 - 1)) {
       aligned_size = (cmp_size + 4) & ~(4 - 1);
     }
 
-    stlink_read_mem32(sl, address + off, (uint16_t) aligned_size);
+    stlink_read_mem32(sl, aligned_read_address, (uint16_t) aligned_size);
 
-    if(memcmp(sl->q_buf, data + off, cmp_size)) {
+    if(memcmp(sl->q_buf + alignment_offset, data + off, cmp_size)) {
       ELOG("Verification of flash failed at offset: %u\n", off);
       return (-1);
     }
+
+    off += cmp_size;
   }
 
   ILOG("Flash written and verified! jolly good!\n");
