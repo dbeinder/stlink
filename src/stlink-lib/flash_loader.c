@@ -724,13 +724,12 @@ int32_t stlink_flashloader_start(stlink_t *sl, flash_loader_t *fl) {
       // L0/L1 have fallback to soft write
       WLOG("stlink_flash_loader_init() == -1\n");
     }
-  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0)
-  {
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
     ILOG("Starting Flash write for WB0\n");
-    // nothing to do, WB0 has no lock mechanism
+
     if(stlink_flash_loader_init(sl, fl) == -1) {
-      // WB0 have fallback to soft write
-      WLOG("stlink_flash_loader_init() == -1\n");
+      ELOG("stlink_flash_loader_init() == -1\n");
+      return (-1);
     }
   } else if((sl->flash_type == STM32_FLASH_TYPE_F0_F1_F3) ||
              (sl->flash_type == STM32_FLASH_TYPE_F1_XL)) {
@@ -779,7 +778,7 @@ int32_t stlink_flashloader_write(stlink_t *sl, flash_loader_t *fl, stm32_addr_t 
   if((sl->flash_type == STM32_FLASH_TYPE_F2_F4) ||
       (sl->flash_type == STM32_FLASH_TYPE_F7) ||
       (sl->flash_type == STM32_FLASH_TYPE_L4) ||
-      (sl->flash_type == STM32_FLASH_TYPE_WB0)) {
+      (sl->flash_type == STM32_FLASH_TYPE_WB0 && addr < sl->otp_base)) {
     uint32_t buf_size = sl->sram_size - 0x1000;
     buf_size = buf_size > 0x8000 ? 0x8000 : buf_size;
     for(off = 0; off < len;) {
@@ -910,38 +909,34 @@ int32_t stlink_flashloader_write(stlink_t *sl, flash_loader_t *fl, stm32_addr_t 
     if(sl->verbose >= 1) {
       fprintf(stdout, "\n");
     }
-  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0 && addr >= sl->otp_base) {
+    // WB0 OTP area can not be written with BURSTWRITE as implemented in flashloader
+    // Writes are done as 32bit words, out of bounds bytes are written as 0xFF (no change to flash)
     for(off = 0; off < len; ) {
-      // write in bursts of 16 bytes, out of bounds bytes are written as 0xFF (no change to flash)
       uint32_t current_addr = addr + off;
-      uint32_t burst_base = current_addr & (~0x0F);
-      uint32_t unused_front = current_addr - burst_base;
-      uint32_t burst_max_data = 16 - unused_front;
       uint32_t remaining = len - off;
-      uint32_t bytes_to_copy = remaining < burst_max_data ? remaining : burst_max_data;
+      uint32_t word_base = current_addr & (~0x03);
+      uint32_t unused_front = current_addr - word_base;
+      uint32_t max_bytes = 4 - unused_front;
+      uint32_t bytes_to_copy = remaining < max_bytes ? remaining : max_bytes;
+      uint32_t data_word = 0xFFFFFFFF;
+      memcpy(((uint8_t*)&data_word) + unused_front, base + off, bytes_to_copy);
+      fprintf(stdout, "addr 0x%08X  word 0x%08X   btc %d  offset %3d\n", current_addr, data_word, bytes_to_copy, off);
 
       stlink_write_debug32(sl, STM32_FLASH_WB0_IRQRAW, STM32_FLASH_WB0_IRQ_ALL);
-      if(bytes_to_copy != 16) {
-        memset(sl->q_buf, 0xFF, 16);
-      }
-      memcpy(sl->q_buf + unused_front, base + off, bytes_to_copy);
-      stlink_write_mem32(sl, STM32_FLASH_WB0_DATA0, 16);
-      stlink_write_debug32(sl, STM32_FLASH_WB0_ADDRESS, (burst_base) >> 2);
-      stlink_write_debug32(sl, STM32_FLASH_WB0_COMMAND, STM32_FLASH_WB0_CMD_BURSTWRITE);
+      stlink_write_debug32(sl, STM32_FLASH_WB0_DATA0, data_word);
+      stlink_write_debug32(sl, STM32_FLASH_WB0_ADDRESS, (current_addr) >> 2);
+      stlink_write_debug32(sl, STM32_FLASH_WB0_COMMAND, STM32_FLASH_WB0_CMD_OTPWRITE);
       uint32_t status;
       do {
         status = read_flash_sr(sl, BANK_1);
       } while ((~status) & STM32_FLASH_WB0_IRQ_CMDDONE);
       status &= STM32_FLASH_WB0_IRQ_ERR_MASK;
       if (status) {
-        ELOG("error (%d) writing chunk at 0x%08X!\n", status, burst_base);
+        ELOG("error (%d) writing OTP word at 0x%08X!\n", status, current_addr);
         return status;
       }
       off += bytes_to_copy;
-      if (sl->verbose >= 1 && (off & (sl->flash_pgsz - 1)) == 0) {
-        fprintf(stdout, "%3u/%-3u pages written\n", (off / sl->flash_pgsz), (len / sl->flash_pgsz));
-        fflush(stdout);
-      }
     }
   } else {
     return (-1);

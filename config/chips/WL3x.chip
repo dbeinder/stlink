@@ -11,5 +11,5 @@ bootrom_base 0x0
 bootrom_size 0x4000          // 16 KB
 option_base 0x0              // protection via FLASH controller commands
 option_size 0x0
-otp_base 0x10080000
+otp_base 0x10001800
 otp_size 0x400               // 1 KB
