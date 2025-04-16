@@ -774,11 +774,13 @@ int32_t stlink_flashloader_start(stlink_t *sl, flash_loader_t *fl) {
 
 int32_t stlink_flashloader_write(stlink_t *sl, flash_loader_t *fl, stm32_addr_t addr, uint8_t *base, uint32_t len) {
   uint32_t off;
+  bool is_exclusively_otp = addr >= sl->otp_base && addr < sl->otp_base + sl->otp_size;
+  bool is_exclusively_flash = addr >= sl->flash_base && addr < sl->flash_base + sl->flash_size;
 
   if((sl->flash_type == STM32_FLASH_TYPE_F2_F4) ||
       (sl->flash_type == STM32_FLASH_TYPE_F7) ||
       (sl->flash_type == STM32_FLASH_TYPE_L4) ||
-      (sl->flash_type == STM32_FLASH_TYPE_WB0 && addr < sl->otp_base)) {
+      (sl->flash_type == STM32_FLASH_TYPE_WB0 && is_exclusively_flash)) {
     uint32_t buf_size = sl->sram_size - 0x1000;
     buf_size = buf_size > 0x8000 ? 0x8000 : buf_size;
     for(off = 0; off < len;) {
@@ -909,7 +911,7 @@ int32_t stlink_flashloader_write(stlink_t *sl, flash_loader_t *fl, stm32_addr_t 
     if(sl->verbose >= 1) {
       fprintf(stdout, "\n");
     }
-  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0 && addr >= sl->otp_base) {
+  } else if((sl->flash_type == STM32_FLASH_TYPE_WB0) && is_exclusively_otp) {
     // WB0 OTP area can not be written with BURSTWRITE as implemented in flashloader
     // Writes are done as 32bit words, out of bounds bytes are written as 0xFF (no change to flash)
     for(off = 0; off < len; ) {

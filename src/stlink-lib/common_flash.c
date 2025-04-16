@@ -1452,7 +1452,7 @@ int32_t stlink_verify_write_flash(stlink_t *sl, stm32_addr_t address, uint8_t *d
   for(off = 0; off < length; ) {
     uint32_t aligned_size;
     uint32_t read_address = address + off;
-    uint32_t aligned_read_address = read_address & 0x03;
+    uint32_t aligned_read_address = read_address & ~(4 - 1);
     uint32_t alignment_offset = read_address - aligned_read_address;
     uint32_t cmp_size = chunk_size - alignment_offset;
 
@@ -1462,8 +1462,9 @@ int32_t stlink_verify_write_flash(stlink_t *sl, stm32_addr_t address, uint8_t *d
 
     aligned_size = alignment_offset + cmp_size;
     if(aligned_size & (4 - 1)) {
-      aligned_size = (cmp_size + 4) & ~(4 - 1);
+      aligned_size = (aligned_size + 4) & ~(4 - 1);
     }
+    ILOG("off 0x%08X  ra 0x%08X  ara 0x%08X  ao %d  cmps 0x%08X   asz 0x%08X\n", off, read_address, aligned_read_address, alignment_offset, cmp_size, aligned_size);
 
     stlink_read_mem32(sl, aligned_read_address, (uint16_t) aligned_size);
 
