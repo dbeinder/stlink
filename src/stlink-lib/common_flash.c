@@ -118,6 +118,8 @@ void lock_flash(stlink_t *sl) {
   } else if(sl->flash_type == STM32_FLASH_TYPE_WB_WL) {
     cr_reg = STM32_FLASH_WB_CR;
     cr_lock_shift = STM32_FLASH_WB_CR_LOCK;
+  } else if(sl->flash_type == STM32_FLASH_TYPE_WB0) {
+    return;
   } else {
     ELOG("unsupported flash method, abort\n");
     return;
@@ -590,6 +592,8 @@ int32_t lock_flash_option(stlink_t *sl) {
     optcr_reg = STM32_FLASH_WB_CR;
     optlock_shift = STM32_FLASH_WB_CR_OPTLOCK;
     break;
+  case STM32_FLASH_TYPE_WB0:
+    return 0;
   default:
     ELOG("unsupported flash method, abort\n");
     return -1;
@@ -669,6 +673,8 @@ static bool is_flash_option_locked(stlink_t *sl) {
     optcr_reg = STM32_FLASH_WB_CR;
     optlock_shift = STM32_FLASH_WB_CR_OPTLOCK;
     break;
+  case STM32_FLASH_TYPE_WB0:
+    return false;
   default:
     ELOG("unsupported flash method, abort\n");
     return -1;

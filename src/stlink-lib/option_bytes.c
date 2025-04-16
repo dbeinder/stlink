@@ -948,6 +948,11 @@ int32_t stlink_read_option_control_register32(stlink_t *sl, uint32_t *option_byt
     return stlink_read_option_control_register_f7(sl, option_byte);
   case STM32_FLASH_TYPE_WB_WL:
     return stlink_read_option_control_register_wb(sl, option_byte);
+  case STM32_FLASH_TYPE_WB0:
+    uint32_t flash_size_reg;
+    int32_t ret = stlink_read_debug32(sl, STM32_FLASH_WB0_FLASH_SIZE, &flash_size_reg);
+    *option_byte = flash_size_reg & (1 << STM32_FLASH_WB0_FLASH_SECURE) ? 0xAAAAAAAA : 0xFFFFFFFF;
+    return ret;
   default:
     return -1;
   }
@@ -986,8 +991,22 @@ int32_t stlink_write_option_control_register32(stlink_t *sl, uint32_t option_cr)
     ret = stlink_write_option_control_register_f7(sl, option_cr);
     break;
   case STM32_FLASH_TYPE_WB_WL:
-    ret = 
-        stlink_write_option_control_register_wb(sl, option_cr);
+    ret = stlink_write_option_control_register_wb(sl, option_cr);
+    break;
+  case STM32_FLASH_TYPE_WB0:
+    if(option_cr != STM32_FLASH_WB0_KEY01_UNLOCK && 
+       option_cr != STM32_FLASH_WB0_KEY01_READOUT_PROT) {
+      ELOG("Invalid RDP option!\n");
+      break;
+    }
+    stlink_write_debug32(sl, STM32_FLASH_WB0_IRQRAW, STM32_FLASH_WB0_IRQ_ALL);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_DATA0, option_cr);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_DATA1, option_cr);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_DATA2, STM32_FLASH_WB0_KEY2);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_DATA3, STM32_FLASH_WB0_KEY3);
+    stlink_write_debug32(sl, STM32_FLASH_WB0_COMMAND, STM32_FLASH_WB0_CMD_KEYWRITE);
+    wait_flash_busy(sl);
+    ret = check_flash_error(sl);
     break;
   default:
     ELOG("Option control register writing is currently not implemented for connected chip\n");
