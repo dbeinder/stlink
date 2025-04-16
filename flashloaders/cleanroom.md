@@ -42,18 +42,20 @@ Exit: After the copying process and before triggering the breakpoint, clear the 
 
 ## stm32wb0.s
 
-`flash_base`: 0x40001000
+System flash origin: 0x10040000
 
-**Reference**: [https://chromium.googlesource.com/chromiumos/platform/ec/+/master/chip/stm32/registers-stm32f0.h](https://chromium.googlesource.com/chromiumos/platform/ec/+/master/chip/stm32/registers-stm32f0.h)
-[https://www.st.com/resource/en/reference_manual/dm00031936-stm32f0x1stm32f0x2stm32f0x8-advanced-armbased-32bit-mcus-stmicroelectronics.pdf](https://www.st.com/resource/en/reference_manual/dm00031936-stm32f0x1stm32f0x2stm32f0x8-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+`FLASH` peripheral: 0x40001000
+
+**Reference**:
+[STM32WB05 RM0491](https://www.st.com/resource/en/reference_manual/rm0491-the-bluenrglps-arm-cortex-m0based-stmicroelectronics.pdf)
+[STM32WB06/07 RM0530](https://www.st.com/resource/en/reference_manual/rm0530--stm32wb07xc-and-stm32wb06xc-ultralow-power-wireless-32bit-mcus-armbased-cortexm0-with-bluetooth-low-energy-and-24-ghz-radio-solution-stmicroelectronics.pdf)
+[STM32WB09 RM0505](https://www.st.com/resource/en/reference_manual/rm0505-stm32wb09xe-ultralow-power-wireless-32bit-mcu-armbased-cortexm0-with-bluetooth-low-energy-and-24-ghz-radio-solution-stmicroelectronics.pdf)
+[STM32WL3x RM0511](https://www.st.com/resource/en/reference_manual/rm0511-stm32wl33xx-armbased-wireless-mcus-with-subghz-radio-solution-stmicroelectronics.pdf)
+
 
 **Special requirements**:
 
-Before every copy, read a word from FLASH_CR, set the PG bit to 1 and write back. Copy one half word each time.
-
-How to wait for the write process: Read a word from FLASH_SR, loop until the busy bit is reset. After that, FLASH_SR is checked. The process is interrupted if the error bit (0x04) is set.
-
-Exit: After the copying process and before triggering the breakpoint, clear the PG bit in FLASH_CR.
+Data is flashed in blocks of 16 bytes, so the destination address must be aligned to 16, and the length must be a multiple of 16 bytes. In contrast to other STM32 devices, writing happens through registers of the `FLASH` peripheral.
 
 ## stm32f4.s
 
