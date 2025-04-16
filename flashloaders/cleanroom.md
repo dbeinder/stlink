@@ -40,6 +40,21 @@ How to wait for the write process: Read a word from FLASH_SR, loop until the bus
 
 Exit: After the copying process and before triggering the breakpoint, clear the PG bit in FLASH_CR.
 
+## stm32wb0.s
+
+`flash_base`: 0x40001000
+
+**Reference**: [https://chromium.googlesource.com/chromiumos/platform/ec/+/master/chip/stm32/registers-stm32f0.h](https://chromium.googlesource.com/chromiumos/platform/ec/+/master/chip/stm32/registers-stm32f0.h)
+[https://www.st.com/resource/en/reference_manual/dm00031936-stm32f0x1stm32f0x2stm32f0x8-advanced-armbased-32bit-mcus-stmicroelectronics.pdf](https://www.st.com/resource/en/reference_manual/dm00031936-stm32f0x1stm32f0x2stm32f0x8-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+
+**Special requirements**:
+
+Before every copy, read a word from FLASH_CR, set the PG bit to 1 and write back. Copy one half word each time.
+
+How to wait for the write process: Read a word from FLASH_SR, loop until the busy bit is reset. After that, FLASH_SR is checked. The process is interrupted if the error bit (0x04) is set.
+
+Exit: After the copying process and before triggering the breakpoint, clear the PG bit in FLASH_CR.
+
 ## stm32f4.s
 
 `flash_base`: 0x40023c00

@@ -1078,20 +1078,31 @@ bool stlink_is_core_halted(stlink_t *sl) {
   return (sl->core_stat == TARGET_HALTED);
 }
 
-int32_t write_buffer_to_sram(stlink_t *sl, flash_loader_t *fl, const uint8_t *buf, uint16_t size) {
-  // write the buffer right after the loader
+int32_t write_buffer_to_sram(stlink_t *sl, flash_loader_t *fl, const uint8_t *buf, uint16_t size, uint16_t padded_size) {
+  // write the buffer right after the loader, and pad the end with 0xFF if padded_size is larger than size
   int32_t ret = 0;
-  uint16_t chunk = size & ~0x3;
-  uint16_t rem = size & 0x3;
-
-  if(chunk) {
-    memcpy(sl->q_buf, buf, chunk);
-    ret = stlink_write_mem32(sl, fl->buf_addr, chunk);
+  uint16_t data_remaining = size;
+  
+  if (padded_size < size) {
+    padded_size = size;
   }
 
-  if(rem && !ret) {
-    memcpy(sl->q_buf, buf + chunk, rem);
-    ret = stlink_write_mem8(sl, (fl->buf_addr) + chunk, rem);
+  uint16_t word_chunk = padded_size & ~0x3;
+  uint16_t byte_chunk = padded_size & 0x3;
+
+  if(word_chunk) {
+    uint16_t data_cnt = word_chunk > data_remaining ? data_remaining : word_chunk;
+    memcpy(sl->q_buf, buf, data_cnt);
+    memset(sl->q_buf + data_cnt, 0xFF, word_chunk - data_cnt);
+    ret = stlink_write_mem32(sl, fl->buf_addr, word_chunk);
+    data_remaining -= data_cnt;
+  }
+
+  if(byte_chunk && !ret) {
+    uint16_t data_cnt = byte_chunk > data_remaining ? data_remaining : byte_chunk;
+    memcpy(sl->q_buf, buf + word_chunk, data_cnt);
+    memset(sl->q_buf + data_cnt, 0xFF, byte_chunk - data_cnt);
+    ret = stlink_write_mem8(sl, (fl->buf_addr) + word_chunk, byte_chunk);
   }
 
   return (ret);
